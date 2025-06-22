@@ -510,13 +510,24 @@ def export_design_to_gds(export_path: str = "./quantum_design.gds") -> str:
         try:
             gds_renderer = design.renderers.gds
             
-            # Clear any existing GDS data to prevent duplicate cell names
-            if hasattr(gds_renderer, 'clear'):
-                gds_renderer.clear()
-            
-            # Clear the GDS library to prevent "Multiple cells with name: TOP" error
+            # Comprehensive clearing of GDS renderer to prevent duplicate cell names
+            # Clear the GDS library completely
             if hasattr(gds_renderer, 'lib') and gds_renderer.lib is not None:
                 gds_renderer.lib = None
+            
+            # Clear any existing data structures
+            if hasattr(gds_renderer, 'clear_data'):
+                gds_renderer.clear_data()
+            elif hasattr(gds_renderer, 'clear'):
+                gds_renderer.clear()
+            
+            # Reset any internal state
+            if hasattr(gds_renderer, '_lib'):
+                gds_renderer._lib = None
+            if hasattr(gds_renderer, '_main_cell'):
+                gds_renderer._main_cell = None
+            if hasattr(gds_renderer, 'elements'):
+                gds_renderer.elements = {}
             
             # Configure GDS export options for better compatibility
             gds_renderer.options['path_filename'] = abs_export_path
@@ -540,32 +551,42 @@ def export_design_to_gds(export_path: str = "./quantum_design.gds") -> str:
 
         # Perform the actual GDS export with proper error handling for duplicate cells
         try:
-            # Clear any existing renderer state before export (with proper method checking)
+            # Final clear before export to ensure clean state
             if hasattr(gds_renderer, 'clear_data'):
                 gds_renderer.clear_data()
             elif hasattr(gds_renderer, 'clear'):
                 gds_renderer.clear()
             
+            # Reset library one more time to be absolutely sure
+            if hasattr(gds_renderer, 'lib'):
+                gds_renderer.lib = None
+            
             gds_renderer.export_to_gds(abs_export_path)
         except Exception as export_error:
-            # If we get a duplicate cell error, try to clear and re-render
-            if "Multiple cells with name" in str(export_error):
+            # If we get a duplicate cell error, try more aggressive clearing
+            if "Multiple cells with name" in str(export_error) or "Cell named" in str(export_error):
                 try:
-                    # Force clear the GDS renderer completely
+                    # Force complete reset of the GDS renderer
                     gds_renderer = design.renderers.gds
-                    if hasattr(gds_renderer, 'lib'):
-                        gds_renderer.lib = None
-                    if hasattr(gds_renderer, 'clear_data'):
-                        gds_renderer.clear_data()
-                    elif hasattr(gds_renderer, 'clear'):
-                        gds_renderer.clear()
+                    
+                    # Clear all possible state variables
+                    for attr in ['lib', '_lib', '_main_cell', 'elements', 'cells']:
+                        if hasattr(gds_renderer, attr):
+                            setattr(gds_renderer, attr, None if attr.endswith('cell') or attr.endswith('lib') else {})
+                    
+                    # Try all clearing methods
+                    for clear_method in ['clear_data', 'clear', 'reset']:
+                        if hasattr(gds_renderer, clear_method):
+                            getattr(gds_renderer, clear_method)()
                     
                     # Re-render the design fresh
                     if hasattr(gds_renderer, 'render_design'):
                         gds_renderer.render_design()
+                    
+                    # Try export again
                     gds_renderer.export_to_gds(abs_export_path)
                 except Exception as alt_export_error:
-                    return f"❌ Error during GDS export (duplicate cells): {str(export_error)}. Retry also failed: {str(alt_export_error)}"
+                    return f"❌ Error during GDS export (duplicate cells): {str(export_error)}. Retry also failed: {str(alt_export_error)}\n\nSuggestion: Try clearing the design and recreating it from scratch."
             else:
                 return f"❌ Error during GDS export: {str(export_error)}"
 
