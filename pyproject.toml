@@ -1,0 +1,19 @@
+[project]
+name = "mcpxquantum"
+version = "0.1.0"
+description = "MCP server for Qiskit Metal quantum circuit design and simulation"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "arxiv>=2.2.0",
+    "mcp>=1.9.4",
+    "qiskit-metal>=0.1.0",
+    "qiskit>=0.45.0",
+    "numpy>=1.24.0,<2.0",
+    "matplotlib>=3.7.0",
+    "scipy>=1.10.0",
+    "pandas>=2.0.0",
+    "plotly>=5.15.0",
+    "kaleido>=0.2.1",
+    "fastmcp>=2.0.0",
+]

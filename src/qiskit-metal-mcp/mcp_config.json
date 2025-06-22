@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "qiskit-metal": {
+      "command": "python3",
+      "args": ["qiskit_metal_mcp.py"],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+} 
