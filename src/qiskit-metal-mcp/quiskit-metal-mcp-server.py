@@ -531,8 +531,12 @@ def export_design_to_gds(export_path: str = "./quantum_design.gds") -> str:
 
         # Perform the actual GDS export with proper error handling for duplicate cells
         try:
-            # Clear any existing renderer state before export
-            gds_renderer.clear_data()
+            # Clear any existing renderer state before export (with proper method checking)
+            if hasattr(gds_renderer, 'clear_data'):
+                gds_renderer.clear_data()
+            elif hasattr(gds_renderer, 'clear'):
+                gds_renderer.clear()
+            
             gds_renderer.export_to_gds(abs_export_path)
         except Exception as export_error:
             # If we get a duplicate cell error, try to clear and re-render
@@ -544,9 +548,12 @@ def export_design_to_gds(export_path: str = "./quantum_design.gds") -> str:
                         gds_renderer.lib = None
                     if hasattr(gds_renderer, 'clear_data'):
                         gds_renderer.clear_data()
+                    elif hasattr(gds_renderer, 'clear'):
+                        gds_renderer.clear()
                     
                     # Re-render the design fresh
-                    gds_renderer.render_design()
+                    if hasattr(gds_renderer, 'render_design'):
+                        gds_renderer.render_design()
                     gds_renderer.export_to_gds(abs_export_path)
                 except Exception as alt_export_error:
                     return f"❌ Error during GDS export (duplicate cells): {str(export_error)}. Retry also failed: {str(alt_export_error)}"
@@ -804,6 +811,170 @@ Current Design: {'✓ Created' if design is not None else '❌ Not created'}
     
     return status.strip()
 
+# === Tool 12: Visualize GDS with KLayout ===
+@mcp.tool()
+def visualize_gds_with_klayout(gds_file_path: str) -> str:
+    """Open and visualize a GDS file using KLayout viewer.
+    
+    This function launches KLayout, a professional IC layout tool, to visualize
+    GDS files containing quantum circuit designs. KLayout provides advanced 
+    visualization capabilities including layer management, measurement tools,
+    and 3D viewing for comprehensive design review.
+    
+    Args:
+        gds_file_path: Path to the GDS file to visualize (e.g., './quantum_design.gds')
+    
+    Features of KLayout visualization:
+    - High-resolution vector graphics rendering
+    - Layer-by-layer view control with color coding
+    - Precise measurement and annotation tools
+    - Zoom and pan for detailed inspection
+    - Cross-sectional views for multi-layer designs
+    - Export capabilities (PNG, SVG, PDF)
+    
+    Returns:
+        Success message confirming KLayout was launched with the GDS file,
+        or detailed error message if KLayout is not available or file issues exist.
+        
+    Prerequisites:
+        - KLayout must be installed and accessible in system PATH
+        - Valid GDS file must exist at the specified path
+        - Display environment for GUI applications (not headless)
+        
+    Installation notes:
+        - Linux: sudo apt install klayout  or  conda install -c conda-forge klayout
+        - macOS: brew install klayout  or  download from klayout.de
+        - Windows: Download installer from klayout.de
+        
+    Note:
+        KLayout will launch as a separate application window. The function returns
+        immediately after launching - KLayout runs independently of the MCP server.
+        Use this for design verification, measurements, and preparing documentation.
+    """
+    import subprocess
+    import shutil
+    
+    try:
+        # Validate the input file path
+        gds_file_path = gds_file_path.strip()
+        if not gds_file_path:
+            return "❌ Error: No GDS file path provided."
+        
+        # Convert to absolute path for better reliability
+        abs_gds_path = os.path.abspath(gds_file_path)
+        
+        # Check if the GDS file exists
+        if not os.path.exists(abs_gds_path):
+            return f"❌ Error: GDS file not found at '{abs_gds_path}'.\n\nPlease check the file path and ensure the file exists."
+        
+        # Check if it's actually a file (not a directory)
+        if not os.path.isfile(abs_gds_path):
+            return f"❌ Error: '{abs_gds_path}' is not a file."
+        
+        # Verify it has a .gds extension (case insensitive)
+        if not abs_gds_path.lower().endswith('.gds'):
+            return f"❌ Warning: File '{abs_gds_path}' does not have a .gds extension. This may not be a valid GDS file."
+        
+        # Check file size to ensure it's not empty
+        file_size = os.path.getsize(abs_gds_path)
+        if file_size == 0:
+            return f"❌ Error: GDS file '{abs_gds_path}' is empty (0 bytes)."
+        
+        # Check if KLayout is installed and accessible
+        klayout_cmd = None
+        for cmd_name in ['klayout', 'klayout_app', 'klayout.exe']:
+            if shutil.which(cmd_name):
+                klayout_cmd = cmd_name
+                break
+        
+        if not klayout_cmd:
+            return """❌ Error: KLayout not found in system PATH.
+
+Installation Instructions:
+==========================
+• Linux (Ubuntu/Debian): sudo apt install klayout
+• Linux (conda): conda install -c conda-forge klayout  
+• macOS (Homebrew): brew install klayout
+• macOS/Windows: Download from https://www.klayout.de/build.html
+
+After installation, ensure 'klayout' command is accessible from terminal.
+
+Alternative:
+If KLayout is installed but not in PATH, you can try:
+- Add KLayout installation directory to your PATH environment variable
+- Use the full path to KLayout executable in the gds_file_path parameter"""
+        
+        # Set up environment for GUI fixes (resolves Wayland/Qt issues)
+        env = os.environ.copy()
+        env['QT_QPA_PLATFORM'] = 'xcb'  # Force X11 backend (fixes Wayland issues)
+        env['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false'  # Reduce Qt warnings
+        env['QT_X11_NO_MITSHM'] = '1'  # Fix threading issues
+        env['KLAYOUT_DISABLE_MACROS'] = '1'  # Disable problematic plugins
+
+        # Launch KLayout with the GDS file and GUI fixes
+        try:
+            # Use subprocess.Popen for non-blocking launch with error suppression
+            # KLayout will run independently of this script
+            process = subprocess.Popen(
+                [klayout_cmd, '-nc', '-z', abs_gds_path],  # -nc: no config, -z: no splash
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True  # Detach from parent process
+            )
+            
+            # Give it a moment to start
+            import time
+            time.sleep(1)
+            
+            # Check if the process started successfully
+            if process.poll() is None:
+                # Process is still running (good)
+                file_size_mb = file_size / (1024 * 1024)
+                
+                return f"""✅ KLayout launched successfully with GUI fixes!
+
+File Information:
+================
+• File: {abs_gds_path}
+• Size: {file_size_mb:.2f} MB ({file_size:,} bytes)
+• Process ID: {process.pid}
+• GUI Backend: X11 (xcb)
+
+Applied Fixes:
+=============
+• Qt X11 backend (fixes Wayland issues)
+• Error suppression (reduces console spam)
+• Threading fixes (resolves QSocketNotifier warnings)
+• No splash screen (faster startup)
+• Disabled problematic macros (LVS/DRC)
+
+KLayout Usage Tips:
+==================
+• Use mouse wheel to zoom in/out
+• Drag to pan around the design
+• Press 'F' to fit design to window
+• Use Layers panel to control visibility
+• Right-click for context menus
+• Ruler tool for measurements (press 'R')
+• Press 'Escape' to clear selections
+
+The KLayout window should now be open with your quantum circuit design.
+If KLayout doesn't appear, check: ps aux | grep klayout
+KLayout runs independently - you can continue using other MCP functions."""
+            else:
+                # Process exited immediately (probably an error)
+                return_code = process.poll()
+                return f"❌ Error: KLayout exited immediately with code {return_code}. Try using the launcher script: ./launch_klayout.sh {abs_gds_path}"
+                
+        except subprocess.SubprocessError as e:
+            return f"❌ Error launching KLayout: {str(e)}"
+        except Exception as e:
+            return f"❌ Unexpected error launching KLayout: {str(e)}"
+    
+    except Exception as e:
+        return f"❌ Unexpected error in visualize_gds_with_klayout: {str(e)}"
+
 # === Resource 1: List Python Examples ===
 @mcp.resource("examples://list")
 def get_python_examples() -> str:
@@ -869,7 +1040,7 @@ def get_python_example_content(filename: str) -> str:
     except Exception as e:
         return f"# Error Reading {filename}\n\nFailed to read the file: {str(e)}"
 
-# === Tool 12: Run Python Example ===
+# === Tool 13: Run Python Example ===
 @mcp.tool()
 def run_python_example(filename: str) -> str:
     """Execute a Python example from the resources directory.
