@@ -1,11 +1,14 @@
 <div align="center">
-  <img src="logo.png" alt="Qiskit Metal MCP Server Logo" width="300">
+  <img src="logo.png" alt="Funky Junction Logo" width="300">
   
-  # Qiskit Metal MCP Server
+  # Funky Junction
+  ## Qiskit Metal MCP Server
 
   A comprehensive Model Context Protocol (MCP) server for quantum circuit design using Qiskit Metal. This server provides tools, resources, and prompts for designing, simulating, and analyzing superconducting quantum circuits.
 
-  *Built at the Stanford MCP x Quantum Science Hackathon 2025*
+  *Built by **Team Silicon Architects** at the Stanford MCP x Quantum Science Hackathon 2025*
+  
+  **Team Members:** Sarah Dweik, Sebastien Boussard, Paul Goldschmidt & Gabriel Dupuis
 </div>
 
 ## 🚀 Features
@@ -95,10 +98,10 @@ pip install klayout          # Professional IC layout viewer
 
 ```bash
 # Build the container
-docker build -t qsim-mcp .
+docker build -t funky-junction .
 
 # Run the server
-docker run -p 3000:3000 qsim-mcp
+docker run -p 3000:3000 funky-junction
 ```
 
 ## 🚀 Quick Start
@@ -112,7 +115,7 @@ python quiskit-metal-mcp-server.py
 
 You should see:
 ```
-🚀 Starting Qiskit Metal FastMCP Server...
+🚀 Starting Funky Junction - Qiskit Metal FastMCP Server...
 📊 Qiskit Metal Available: True
 Server running on port 3000...
 ```
@@ -341,7 +344,7 @@ Edit `src/qiskit-metal-mcp/config.json`:
 ```json
 {
   "server": {
-    "name": "Qiskit Metal MCP Server",
+    "name": "Funky Junction - Qiskit Metal MCP Server",
     "version": "1.0.0",
     "port": 3000
   },
@@ -361,8 +364,9 @@ Edit `src/qiskit-metal-mcp/config.json`:
 ### **Project Structure**
 
 ```
-qsim-mcp/
+funky-junction/
 ├── README.md                          # This file
+├── logo.png                           # Project logo
 ├── requirements.txt                   # Python dependencies
 ├── .env.example                       # Environment template
 ├── src/
@@ -572,10 +576,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Issues**: [GitHub Issues](https://github.com/PaulGoldschmidt/qsim-mcp/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/PaulGoldschmidt/qsim-mcp/discussions)
 - **Documentation**: [Project Wiki](https://github.com/PaulGoldschmidt/qsim-mcp/wiki)
-- **Email**: [paul.goldschmidt@example.com](mailto:paul.goldschmidt@example.com)
+
+**Team Silicon Architects Contact:**
+- **Sarah Dweik**
+- **Sebastien Boussard** 
+- **Paul Goldschmidt**
+- **Gabriel Dupuis**
 
 ---
 
-**Built with ❤️ for the quantum computing community**
+**Built with ❤️ by Team Silicon Architects for the quantum computing community**
 
-*Enabling accessible quantum circuit design through intelligent tooling and comprehensive resources.*
+*Funky Junction: Enabling accessible quantum circuit design through intelligent tooling and comprehensive resources.*
