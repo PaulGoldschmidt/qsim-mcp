@@ -167,31 +167,31 @@ def create_transmons(q1_name: str = 'Q1', q2_name: str = 'Q2',
         return "❌ Please run create_design() first."
 
     try:
-        TransmonPocket(design, q1_name, options=dict(
+        TransmonPocket(design, q1_name, options=QDict(
             pad_width=pad_width,
             pad_height=pad_height,
             pocket_width=pocket_width,
             pocket_height=pocket_height,
             pad_gap=pad_gap,
             inductor_width=inductor_width,
-            connection_pads=dict(
-                a=dict(loc_W=+1, loc_H=0),
-                b=dict(loc_W=-1, loc_H=0)
+            connection_pads=QDict(
+                a=QDict(loc_W=+1, loc_H=0),
+                b=QDict(loc_W=-1, loc_H=0)
             ),
             pos_x=q1_pos_x,
             pos_y=q1_pos_y
         ))
 
-        TransmonPocket(design, q2_name, options=dict(
+        TransmonPocket(design, q2_name, options=QDict(
             pad_width=pad_width,
             pad_height=pad_height,
             pocket_width=pocket_width,
             pocket_height=pocket_height,
             pad_gap=pad_gap,
             inductor_width=inductor_width,
-            connection_pads=dict(
-                a=dict(loc_W=+1, loc_H=0),
-                b=dict(loc_W=-1, loc_H=0)
+            connection_pads=QDict(
+                a=QDict(loc_W=+1, loc_H=0),
+                b=QDict(loc_W=-1, loc_H=0)
             ),
             pos_x=q2_pos_x,
             pos_y=q2_pos_y
@@ -249,7 +249,7 @@ def add_coupler(coupler_name: str = 'SpiralCoupler', n_turns: int = 3,
         return "❌ Please run create_design() first."
 
     try:
-        NSquareSpiral(design, coupler_name, options=dict(
+        NSquareSpiral(design, coupler_name, options=QDict(
             n=n_turns,
             spacing=spacing,
             width=width,
@@ -316,7 +316,7 @@ def add_josephson_junction(junction_name: str = 'JJ1', width: str = '0.01mm',
         return "❌ Please run create_design() first."
 
     try:
-        jj_manhattan(design, junction_name, options=dict(
+        jj_manhattan(design, junction_name, options=QDict(
             width=width,
             orientation=orientation,
             pos_x=pos_x,
@@ -492,15 +492,17 @@ def export_design_to_gds(export_path: str = "./quantum_design.gds") -> str:
         if not hasattr(design, 'components') or len(design.components) == 0:
             return "❌ Warning: Design contains no components. Add some components (qubits, transmission lines, etc.) before exporting."
 
-        # Rebuild the design to ensure all components are properly rendered
-        try:
-            design.rebuild()
-        except Exception as rebuild_error:
-            return f"❌ Error rebuilding design before export: {str(rebuild_error)}. The design may have invalid components."
-
-        # Initialize and configure the GDS renderer
+        # Initialize and configure the GDS renderer first
         try:
             gds_renderer = design.renderers.gds
+            
+            # Clear any existing GDS data to prevent duplicate cell names
+            if hasattr(gds_renderer, 'clear'):
+                gds_renderer.clear()
+            
+            # Clear the GDS library to prevent "Multiple cells with name: TOP" error
+            if hasattr(gds_renderer, 'lib') and gds_renderer.lib is not None:
+                gds_renderer.lib = None
             
             # Configure GDS export options for better compatibility
             gds_renderer.options['path_filename'] = abs_export_path
@@ -516,17 +518,35 @@ def export_design_to_gds(export_path: str = "./quantum_design.gds") -> str:
         except AttributeError as attr_error:
             return f"❌ Error: GDS renderer not properly initialized. Design may be corrupted. Details: {str(attr_error)}"
 
-        # Perform the actual GDS export
+        # Rebuild the design to ensure all components are properly rendered
         try:
+            design.rebuild()
+        except Exception as rebuild_error:
+            return f"❌ Error rebuilding design before export: {str(rebuild_error)}. The design may have invalid components."
+
+        # Perform the actual GDS export with proper error handling for duplicate cells
+        try:
+            # Clear any existing renderer state before export
+            gds_renderer.clear_data()
             gds_renderer.export_to_gds(abs_export_path)
         except Exception as export_error:
-            # Try alternative export method if the first one fails
-            try:
-                # Alternative method: render to GDS directly
-                gds_renderer.render_design()
-                gds_renderer.export_to_gds(abs_export_path)
-            except Exception as alt_export_error:
-                return f"❌ Error during GDS export: {str(export_error)}. Alternative method also failed: {str(alt_export_error)}"
+            # If we get a duplicate cell error, try to clear and re-render
+            if "Multiple cells with name" in str(export_error):
+                try:
+                    # Force clear the GDS renderer completely
+                    gds_renderer = design.renderers.gds
+                    if hasattr(gds_renderer, 'lib'):
+                        gds_renderer.lib = None
+                    if hasattr(gds_renderer, 'clear_data'):
+                        gds_renderer.clear_data()
+                    
+                    # Re-render the design fresh
+                    gds_renderer.render_design()
+                    gds_renderer.export_to_gds(abs_export_path)
+                except Exception as alt_export_error:
+                    return f"❌ Error during GDS export (duplicate cells): {str(export_error)}. Retry also failed: {str(alt_export_error)}"
+            else:
+                return f"❌ Error during GDS export: {str(export_error)}"
 
         # Verify the file was created and has content
         if not os.path.exists(abs_export_path):
