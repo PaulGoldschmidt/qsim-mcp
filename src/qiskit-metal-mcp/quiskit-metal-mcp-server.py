@@ -36,7 +36,7 @@ design = None
 gui = None
 
 # Resources directory path
-RESOURCES_DIR = Path(__file__).parent.parent.parent / "resources"
+RESOURCES_DIR = Path(__file__).parent.parent / "resources"
 
 # === Tool 1: Create Design ===
 @mcp.tool()
