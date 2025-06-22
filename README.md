@@ -1,8 +1,12 @@
-# Qiskit Metal MCP Server
+<div align="center">
+  <img src="logo.png" alt="Qiskit Metal MCP Server Logo" width="300">
+  
+  # Qiskit Metal MCP Server
 
-A comprehensive Model Context Protocol (MCP) server for quantum circuit design using Qiskit Metal. This server provides tools, resources, and prompts for designing, simulating, and analyzing superconducting quantum circuits.
+  A comprehensive Model Context Protocol (MCP) server for quantum circuit design using Qiskit Metal. This server provides tools, resources, and prompts for designing, simulating, and analyzing superconducting quantum circuits.
 
-*Built at the Stanford MCP x Quantum Science Hackathon 2025*
+  *Built at the Stanford MCP x Quantum Science Hackathon 2025*
+</div>
 
 ## 🚀 Features
 
