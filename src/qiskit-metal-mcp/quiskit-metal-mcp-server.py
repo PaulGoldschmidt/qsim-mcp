@@ -2,6 +2,8 @@
 
 # === Imports ===
 import os
+import json
+from pathlib import Path
 from fastmcp import FastMCP
 
 # Try to import qiskit-metal components, but make them optional
@@ -32,6 +34,9 @@ mcp = FastMCP("Qiskit Metal MCP Server")
 # Global holders for stateful objects
 design = None
 gui = None
+
+# Resources directory path
+RESOURCES_DIR = Path(__file__).parent.parent.parent / "resources"
 
 # === Tool 1: Create Design ===
 @mcp.tool()
@@ -798,6 +803,160 @@ Current Design: {'✓ Created' if design is not None else '❌ Not created'}
             status += "Components: Error reading\n"
     
     return status.strip()
+
+# === Resource 1: List Python Examples ===
+@mcp.resource("examples://list")
+def get_python_examples() -> str:
+    """
+    List all available Python examples in the resources directory.
+    
+    This resource provides a list of all Python example files that can be run
+    to demonstrate quantum circuit design patterns and techniques.
+    """
+    if not RESOURCES_DIR.exists():
+        return "# No Examples Found\n\nThe resources directory does not exist."
+    
+    python_files = []
+    for file_path in RESOURCES_DIR.glob("*.py"):
+        if file_path.name != "__init__.py":
+            python_files.append(file_path.name)
+    
+    if not python_files:
+        return "# No Python Examples Found\n\nNo Python files found in the resources directory."
+    
+    content = "# Available Python Examples\n\n"
+    content += "These examples demonstrate various quantum circuit design patterns:\n\n"
+    
+    for filename in sorted(python_files):
+        content += f"- **{filename}** - Use @{filename} to view the code\n"
+    
+    content += "\n## Usage\n"
+    content += "- Use `@examples://list` to see this list\n"
+    content += "- Use `@examples://{filename}` to view a specific example's source code\n"
+    content += "- Use the `run_python_example` tool to execute an example\n"
+    
+    return content
+
+# === Resource 2: Get Python Example Content ===
+@mcp.resource("examples://{filename}")
+def get_python_example_content(filename: str) -> str:
+    """
+    Get the source code content of a specific Python example.
+    
+    Args:
+        filename: The name of the Python file to retrieve (e.g., 'demo.py')
+    """
+    if not filename.endswith('.py'):
+        filename += '.py'
+    
+    file_path = RESOURCES_DIR / filename
+    
+    if not file_path.exists():
+        return f"# Example Not Found: {filename}\n\nThe file '{filename}' does not exist in the resources directory.\n\nUse @examples://list to see available examples."
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            source_code = f.read()
+        
+        content = f"# Source Code: {filename}\n\n"
+        content += f"**File Path:** `{file_path}`\n\n"
+        content += "## Source Code\n\n"
+        content += f"```python\n{source_code}\n```\n\n"
+        content += "## Usage\n"
+        content += f"Use the `run_python_example` tool with filename='{filename}' to execute this example.\n"
+        
+        return content
+    except Exception as e:
+        return f"# Error Reading {filename}\n\nFailed to read the file: {str(e)}"
+
+# === Tool 12: Run Python Example ===
+@mcp.tool()
+def run_python_example(filename: str) -> str:
+    """Execute a Python example from the resources directory.
+    
+    This tool allows you to run quantum circuit design examples that demonstrate
+    various patterns and techniques. The examples are executed in a controlled
+    environment and their output is captured for analysis.
+    
+    Args:
+        filename: Name of the Python file to execute (e.g., 'demo.py')
+    
+    Returns:
+        Success message with execution output or error details if execution fails.
+        
+    Prerequisites:
+        - The specified Python file must exist in the resources directory
+        - Required dependencies must be installed
+        
+    Note:
+        Examples are executed in the same environment as the MCP server.
+        Some examples may require additional setup or dependencies.
+    """
+    if not filename.endswith('.py'):
+        filename += '.py'
+    
+    file_path = RESOURCES_DIR / filename
+    
+    if not file_path.exists():
+        available_files = [f.name for f in RESOURCES_DIR.glob("*.py") if f.name != "__init__.py"]
+        return f"❌ File '{filename}' not found in resources directory.\n\nAvailable files: {', '.join(available_files)}"
+    
+    try:
+        # Execute the Python file and capture output
+        import subprocess
+        import sys
+        
+        result = subprocess.run(
+            [sys.executable, str(file_path)],
+            capture_output=True,
+            text=True,
+            timeout=30,  # 30 second timeout
+            cwd=str(RESOURCES_DIR)
+        )
+        
+        success_msg = f"✓ Successfully executed {filename}"
+        
+        if result.stdout:
+            success_msg += f"\n\n📄 Output:\n{result.stdout}"
+        
+        if result.stderr:
+            success_msg += f"\n\n⚠️ Warnings/Errors:\n{result.stderr}"
+        
+        if result.returncode != 0:
+            success_msg += f"\n\n❌ Process exited with code: {result.returncode}"
+        
+        return success_msg
+        
+    except subprocess.TimeoutExpired:
+        return f"❌ Timeout: {filename} took longer than 30 seconds to execute."
+    except Exception as e:
+        return f"❌ Error executing {filename}: {str(e)}"
+
+# === Prompt: Generate Example Execution Prompt ===
+@mcp.prompt()
+def run_example_prompt(filename: str, analyze_output: bool = True) -> str:
+    """Generate a prompt for executing and analyzing a Python quantum circuit example."""
+    return f"""Execute and analyze the quantum circuit example '{filename}' using the available tools. Follow these instructions:
+
+1. First, use the run_python_example tool to execute the file:
+   - Call run_python_example(filename='{filename}')
+   - Review the execution output for any errors or warnings
+
+2. If you want to examine the source code, use the resource:
+   - Access @examples://{filename} to view the source code
+   - Understand the quantum circuit design patterns being demonstrated
+
+3. {"Provide a comprehensive analysis that includes:" if analyze_output else "Provide a summary that includes:"}
+   - Overview of what the example demonstrates
+   - Key quantum circuit components used (qubits, resonators, couplers, etc.)
+   - Design patterns and techniques shown
+   - Any notable features or innovations
+   {"- Analysis of the execution output and results" if analyze_output else ""}
+   {"- Potential modifications or extensions to the design" if analyze_output else ""}
+
+4. Format your response with clear headings and bullet points for easy readability.
+
+Execute the example '{filename}' and provide {"detailed analysis" if analyze_output else "a summary"} of the quantum circuit design it demonstrates."""
 
 if __name__ == "__main__":
     print("🚀 Starting Qiskit Metal FastMCP Server...")
