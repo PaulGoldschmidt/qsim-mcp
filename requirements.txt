@@ -1,0 +1,24 @@
+# Core MCP and Quantum Computing Libraries
+fastmcp>=1.0.0
+qiskit-metal>=0.1.0
+
+# PDF Processing Libraries (choose one or more)
+PyPDF2>=3.0.0
+pdfplumber>=0.10.0
+PyMuPDF>=1.23.0
+
+# Standard Library Extensions
+pathlib2>=2.3.0
+numpy>=1.21.0
+
+# Optional: Visualization and Layout
+# klayout>=0.28.0  # Uncomment if installing via pip
+
+# Development Dependencies (optional)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+
+# Documentation Dependencies (optional)
+sphinx>=5.0.0
+sphinx-rtd-theme>=1.0.0
