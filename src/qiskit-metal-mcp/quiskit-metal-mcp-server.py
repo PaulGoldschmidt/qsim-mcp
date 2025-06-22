@@ -975,7 +975,59 @@ KLayout runs independently - you can continue using other MCP functions."""
     except Exception as e:
         return f"❌ Unexpected error in visualize_gds_with_klayout: {str(e)}"
 
-# === Resource 1: List Python Examples ===
+# === Resource 1: List All Resources ===
+@mcp.resource("resources://list")
+def get_all_resources() -> str:
+    """
+    List all available resources in the resources directory including Python examples and PDFs.
+    
+    This resource provides a comprehensive list of all files that can be accessed
+    for quantum circuit design learning and reference.
+    """
+    if not RESOURCES_DIR.exists():
+        return "# No Resources Found\n\nThe resources directory does not exist."
+    
+    python_files = []
+    pdf_files = []
+    
+    for file_path in RESOURCES_DIR.glob("*"):
+        if file_path.is_file():
+            if file_path.suffix.lower() == ".py" and file_path.name != "__init__.py":
+                python_files.append(file_path.name)
+            elif file_path.suffix.lower() == ".pdf":
+                pdf_files.append(file_path.name)
+    
+    content = "# Available Resources\n\n"
+    
+    if python_files:
+        content += "## 🐍 Python Examples\n"
+        content += "These examples demonstrate quantum circuit design patterns:\n\n"
+        for filename in sorted(python_files):
+            content += f"- **{filename}** - Use @examples://{filename} to view code\n"
+        content += "\n"
+    
+    if pdf_files:
+        content += "## 📄 Research Papers & Documentation\n"
+        content += "Academic papers and technical documentation:\n\n"
+        for filename in sorted(pdf_files):
+            title = filename.replace('.pdf', '').replace('_', ' ').replace('-', ' ')
+            content += f"- **{title}** - Use @pdfs://{filename} to access\n"
+        content += "\n"
+    
+    if not python_files and not pdf_files:
+        return "# No Resources Found\n\nNo Python files or PDFs found in the resources directory."
+    
+    content += "## Usage\n"
+    content += "- Use `@resources://list` to see this comprehensive list\n"
+    content += "- Use `@examples://list` to see only Python examples\n"
+    content += "- Use `@pdfs://list` to see only PDF documents\n"
+    content += "- Use `@examples://{filename}` to view Python source code\n"
+    content += "- Use `@pdfs://{filename}` to get PDF information\n"
+    content += "- Use tools `run_python_example` and `extract_pdf_text` to work with files\n"
+    
+    return content
+
+# === Resource 2: List Python Examples ===
 @mcp.resource("examples://list")
 def get_python_examples() -> str:
     """
@@ -999,7 +1051,7 @@ def get_python_examples() -> str:
     content += "These examples demonstrate various quantum circuit design patterns:\n\n"
     
     for filename in sorted(python_files):
-        content += f"- **{filename}** - Use @{filename} to view the code\n"
+        content += f"- **{filename}** - Use @examples://{filename} to view the code\n"
     
     content += "\n## Usage\n"
     content += "- Use `@examples://list` to see this list\n"
@@ -1008,7 +1060,110 @@ def get_python_examples() -> str:
     
     return content
 
-# === Resource 2: Get Python Example Content ===
+# === Resource 3: List PDF Documents ===
+@mcp.resource("pdfs://list")
+def get_pdf_documents() -> str:
+    """
+    List all available PDF documents in the resources directory.
+    
+    This resource provides a list of all PDF files containing research papers,
+    technical documentation, and reference materials for quantum circuit design.
+    """
+    if not RESOURCES_DIR.exists():
+        return "# No PDFs Found\n\nThe resources directory does not exist."
+    
+    pdf_files = []
+    for file_path in RESOURCES_DIR.glob("*.pdf"):
+        pdf_files.append(file_path.name)
+    
+    if not pdf_files:
+        return "# No PDF Documents Found\n\nNo PDF files found in the resources directory."
+    
+    content = "# Available PDF Documents\n\n"
+    content += "Research papers and technical documentation for quantum circuit design:\n\n"
+    
+    for filename in sorted(pdf_files):
+        # Create a readable title from filename
+        title = filename.replace('.pdf', '').replace('_', ' ').replace('-', ' ')
+        content += f"- **{title}**\n"
+        content += f"  - File: `{filename}`\n"
+        content += f"  - Access: Use @pdfs://{filename} to get info\n"
+        content += f"  - Extract: Use `extract_pdf_text` tool with filename='{filename}'\n\n"
+    
+    content += "## Usage\n"
+    content += "- Use `@pdfs://list` to see this list\n"
+    content += "- Use `@pdfs://{filename}` to get PDF metadata and information\n"
+    content += "- Use the `extract_pdf_text` tool to extract readable content\n"
+    
+    return content
+
+# === Resource 4: Get PDF Information ===
+@mcp.resource("pdfs://{filename}")
+def get_pdf_info(filename: str) -> str:
+    """
+    Get information about a specific PDF document.
+    
+    Args:
+        filename: The name of the PDF file to get info about (e.g., 'CircuitQuantumElectrodynamics.pdf')
+    """
+    if not filename.endswith('.pdf'):
+        filename += '.pdf'
+    
+    file_path = RESOURCES_DIR / filename
+    
+    if not file_path.exists():
+        return f"# PDF Not Found: {filename}\n\nThe file '{filename}' does not exist in the resources directory.\n\nUse @pdfs://list to see available PDFs."
+    
+    try:
+        # Get basic file information
+        file_size = file_path.stat().st_size
+        file_size_mb = file_size / (1024 * 1024)
+        
+        # Create readable title from filename
+        title = filename.replace('.pdf', '').replace('_', ' ').replace('-', ' ')
+        
+        content = f"# PDF Document: {title}\n\n"
+        content += f"**Filename:** `{filename}`\n"
+        content += f"**File Path:** `{file_path}`\n"
+        content += f"**File Size:** {file_size_mb:.2f} MB ({file_size:,} bytes)\n\n"
+        
+        # Try to extract basic PDF metadata if possible
+        try:
+            import PyPDF2
+            with open(file_path, 'rb') as pdf_file:
+                pdf_reader = PyPDF2.PdfReader(pdf_file)
+                num_pages = len(pdf_reader.pages)
+                
+                content += f"**Pages:** {num_pages}\n"
+                
+                # Try to get metadata
+                if pdf_reader.metadata:
+                    metadata = pdf_reader.metadata
+                    if metadata.title:
+                        content += f"**Title:** {metadata.title}\n"
+                    if metadata.author:
+                        content += f"**Author:** {metadata.author}\n"
+                    if metadata.subject:
+                        content += f"**Subject:** {metadata.subject}\n"
+                    if metadata.creator:
+                        content += f"**Creator:** {metadata.creator}\n"
+                
+        except ImportError:
+            content += "**Note:** PyPDF2 not available for detailed PDF analysis\n"
+        except Exception as e:
+            content += f"**Note:** Could not read PDF metadata: {str(e)}\n"
+        
+        content += "\n## Usage\n"
+        content += f"- Use `extract_pdf_text(filename='{filename}')` to extract readable text\n"
+        content += f"- Use `extract_pdf_text(filename='{filename}', pages='1-3')` to extract specific pages\n"
+        content += "- This document contains technical information about quantum circuit design\n"
+        
+        return content
+        
+    except Exception as e:
+        return f"# Error Reading PDF Info: {filename}\n\nFailed to get file information: {str(e)}"
+
+# === Resource 5: Get Python Example Content ===
 @mcp.resource("examples://{filename}")
 def get_python_example_content(filename: str) -> str:
     """
@@ -1103,6 +1258,185 @@ def run_python_example(filename: str) -> str:
     except Exception as e:
         return f"❌ Error executing {filename}: {str(e)}"
 
+# === Tool 14: Extract PDF Text ===
+@mcp.tool()
+def extract_pdf_text(filename: str, pages: str = "all", max_chars: int = 10000) -> str:
+    """Extract text content from a PDF document in the resources directory.
+    
+    This tool extracts readable text from PDF research papers and technical documents,
+    making their content accessible for analysis and reference. Supports full document
+    extraction or specific page ranges.
+    
+    Args:
+        filename: Name of the PDF file to extract text from (e.g., 'CircuitQuantumElectrodynamics.pdf')
+        pages: Page specification - 'all' for entire document, '1-3' for range, '1,3,5' for specific pages (default: 'all')
+        max_chars: Maximum characters to return to prevent overwhelming output (default: 10000)
+    
+    Returns:
+        Extracted text content with metadata, or error message if extraction fails.
+        
+    Prerequisites:
+        - The specified PDF file must exist in the resources directory
+        - PyPDF2 or similar PDF library should be installed for best results
+        
+    Note:
+        Text extraction quality depends on the PDF format. Scanned documents
+        (images) may not extract well without OCR capabilities.
+    """
+    if not filename.endswith('.pdf'):
+        filename += '.pdf'
+    
+    file_path = RESOURCES_DIR / filename
+    
+    if not file_path.exists():
+        available_files = [f.name for f in RESOURCES_DIR.glob("*.pdf")]
+        return f"❌ PDF '{filename}' not found in resources directory.\n\nAvailable PDFs: {', '.join(available_files)}"
+    
+    try:
+        # Try PyPDF2 first (most common)
+        try:
+            import PyPDF2
+            return _extract_with_pypdf2(file_path, filename, pages, max_chars)
+        except ImportError:
+            pass
+        
+        # Try pdfplumber as alternative
+        try:
+            import pdfplumber
+            return _extract_with_pdfplumber(file_path, filename, pages, max_chars)
+        except ImportError:
+            pass
+        
+        # Try pymupdf as another alternative
+        try:
+            import fitz  # PyMuPDF
+            return _extract_with_pymupdf(file_path, filename, pages, max_chars)
+        except ImportError:
+            pass
+        
+        # If no PDF libraries available, return helpful message
+        return f"""❌ No PDF extraction libraries available.
+
+To enable PDF text extraction, install one of:
+• PyPDF2: pip install PyPDF2
+• pdfplumber: pip install pdfplumber  
+• PyMuPDF: pip install PyMuPDF
+
+File Information:
+• File: {filename}
+• Path: {file_path}
+• Size: {file_path.stat().st_size / (1024*1024):.2f} MB
+
+Use @pdfs://{filename} to get PDF metadata without text extraction."""
+        
+    except Exception as e:
+        return f"❌ Error extracting text from {filename}: {str(e)}"
+
+def _extract_with_pypdf2(file_path, filename, pages, max_chars):
+    """Extract text using PyPDF2 library."""
+    import PyPDF2
+    
+    with open(file_path, 'rb') as pdf_file:
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        total_pages = len(pdf_reader.pages)
+        
+        # Parse page specification
+        page_nums = _parse_page_spec(pages, total_pages)
+        
+        extracted_text = ""
+        for page_num in page_nums:
+            if 0 <= page_num < total_pages:
+                page = pdf_reader.pages[page_num]
+                page_text = page.extract_text()
+                extracted_text += f"\n--- Page {page_num + 1} ---\n{page_text}\n"
+        
+        return _format_extraction_result(filename, extracted_text, page_nums, total_pages, max_chars, "PyPDF2")
+
+def _extract_with_pdfplumber(file_path, filename, pages, max_chars):
+    """Extract text using pdfplumber library."""
+    import pdfplumber
+    
+    with pdfplumber.open(file_path) as pdf:
+        total_pages = len(pdf.pages)
+        page_nums = _parse_page_spec(pages, total_pages)
+        
+        extracted_text = ""
+        for page_num in page_nums:
+            if 0 <= page_num < total_pages:
+                page = pdf.pages[page_num]
+                page_text = page.extract_text() or ""
+                extracted_text += f"\n--- Page {page_num + 1} ---\n{page_text}\n"
+        
+        return _format_extraction_result(filename, extracted_text, page_nums, total_pages, max_chars, "pdfplumber")
+
+def _extract_with_pymupdf(file_path, filename, pages, max_chars):
+    """Extract text using PyMuPDF library."""
+    import fitz
+    
+    pdf_doc = fitz.open(file_path)
+    total_pages = pdf_doc.page_count
+    page_nums = _parse_page_spec(pages, total_pages)
+    
+    extracted_text = ""
+    for page_num in page_nums:
+        if 0 <= page_num < total_pages:
+            page = pdf_doc[page_num]
+            page_text = page.get_text()
+            extracted_text += f"\n--- Page {page_num + 1} ---\n{page_text}\n"
+    
+    pdf_doc.close()
+    return _format_extraction_result(filename, extracted_text, page_nums, total_pages, max_chars, "PyMuPDF")
+
+def _parse_page_spec(pages, total_pages):
+    """Parse page specification into list of page numbers (0-indexed)."""
+    if pages.lower() == "all":
+        return list(range(total_pages))
+    
+    page_nums = []
+    
+    # Handle comma-separated values and ranges
+    for part in pages.split(','):
+        part = part.strip()
+        if '-' in part:
+            # Handle range like "1-3"
+            start, end = part.split('-')
+            start_page = max(0, int(start.strip()) - 1)  # Convert to 0-indexed
+            end_page = min(total_pages - 1, int(end.strip()) - 1)
+            page_nums.extend(range(start_page, end_page + 1))
+        else:
+            # Handle single page
+            page_num = max(0, min(total_pages - 1, int(part) - 1))  # Convert to 0-indexed
+            page_nums.append(page_num)
+    
+    return sorted(list(set(page_nums)))  # Remove duplicates and sort
+
+def _format_extraction_result(filename, extracted_text, page_nums, total_pages, max_chars, method):
+    """Format the final extraction result."""
+    # Truncate if too long
+    if len(extracted_text) > max_chars:
+        extracted_text = extracted_text[:max_chars] + f"\n\n... [TRUNCATED - showing first {max_chars} characters]"
+    
+    pages_extracted = [p + 1 for p in page_nums]  # Convert back to 1-indexed for display
+    
+    result = f"""✓ Successfully extracted text from {filename}
+
+📄 **File Information:**
+• Total Pages: {total_pages}
+• Pages Extracted: {pages_extracted}
+• Extraction Method: {method}
+• Text Length: {len(extracted_text):,} characters
+
+📝 **Extracted Content:**
+{extracted_text}
+
+💡 **Usage Tips:**
+• Use pages='1-5' to extract specific page ranges
+• Use max_chars parameter to control output length
+• Text quality depends on PDF format (best with text-based PDFs)
+"""
+    
+    return result
+
 # === Prompt: Generate Example Execution Prompt ===
 @mcp.prompt()
 def run_example_prompt(filename: str, analyze_output: bool = True) -> str:
@@ -1128,6 +1462,46 @@ def run_example_prompt(filename: str, analyze_output: bool = True) -> str:
 4. Format your response with clear headings and bullet points for easy readability.
 
 Execute the example '{filename}' and provide {"detailed analysis" if analyze_output else "a summary"} of the quantum circuit design it demonstrates."""
+
+# === Prompt: Analyze PDF Document ===
+@mcp.prompt()
+def analyze_pdf_prompt(filename: str, focus_area: str = "general", max_pages: int = 10) -> str:
+    """Generate a prompt for analyzing a PDF research document."""
+    return f"""Analyze the research document '{filename}' focusing on {focus_area} aspects. Follow these instructions:
+
+1. First, get basic information about the PDF:
+   - Use @pdfs://{filename} to view document metadata and information
+   - Review the document structure, page count, and basic details
+
+2. Extract and analyze the content:
+   - Use extract_pdf_text(filename='{filename}', pages='1-{max_pages}') to get the main content
+   - Focus on the first {max_pages} pages which typically contain key information
+
+3. Provide a comprehensive analysis that includes:
+   - **Document Overview**: Title, authors, publication context, and main topic
+   - **Key Concepts**: Primary quantum circuit design concepts discussed
+   - **Technical Contributions**: Novel techniques, methodologies, or innovations presented
+   - **Relevance to Quantum Computing**: How this relates to practical quantum circuit design
+   - **Important Equations/Formulas**: Any significant mathematical relationships (if extractable)
+   - **Experimental Results**: Key findings or performance metrics mentioned
+   - **Applications**: Practical applications or use cases for the techniques described
+
+4. For specific focus areas:
+   - **"couplers"**: Focus on qubit coupling mechanisms and techniques
+   - **"qubits"**: Emphasize qubit design, fabrication, and characterization
+   - **"circuits"**: Highlight overall circuit architecture and design patterns
+   - **"fabrication"**: Focus on manufacturing processes and techniques
+   - **"theory"**: Emphasize theoretical foundations and mathematical models
+   - **"general"**: Provide balanced coverage of all aspects
+
+5. Conclude with:
+   - **Key Takeaways**: 3-5 most important points from the document
+   - **Relevance to Practice**: How this knowledge applies to quantum circuit design
+   - **Further Reading**: Suggestions for related topics or follow-up research
+
+Format your response with clear headings and bullet points for easy readability.
+
+Analyze the document '{filename}' with focus on {focus_area} aspects and provide insights relevant to quantum circuit design."""
 
 if __name__ == "__main__":
     print("🚀 Starting Qiskit Metal FastMCP Server...")
