@@ -466,6 +466,9 @@ def export_design_to_gds(export_path: str = "./quantum_design.gds") -> str:
         return "❌ Please run create_design() first to initialize a design."
 
     try:
+        # Get current working directory for relative path resolution
+        current_dir = os.getcwd()
+        
         # Validate the export path
         export_path = export_path.strip()
         if not export_path:
@@ -475,8 +478,14 @@ def export_design_to_gds(export_path: str = "./quantum_design.gds") -> str:
         if not export_path.lower().endswith('.gds'):
             export_path += '.gds'
             
-        # Use cross-platform paths and create directory if needed
-        abs_export_path = os.path.abspath(export_path)
+        # Handle path resolution - if relative, resolve from current working directory
+        if not os.path.isabs(export_path):
+            abs_export_path = os.path.join(current_dir, export_path)
+        else:
+            abs_export_path = export_path
+            
+        # Normalize the path
+        abs_export_path = os.path.normpath(abs_export_path)
         export_dir = os.path.dirname(abs_export_path)
         
         # Create directory if it doesn't exist
@@ -573,10 +582,18 @@ def export_design_to_gds(export_path: str = "./quantum_design.gds") -> str:
         component_names = list(design.components.keys())
         file_size_mb = file_size / (1024 * 1024)
         
+        # Calculate relative path for user-friendly display
+        try:
+            rel_export_path = os.path.relpath(abs_export_path, current_dir)
+        except ValueError:
+            rel_export_path = abs_export_path
+            
         success_message = f"""✓ Design successfully exported to GDS!
 
 File Details:
-  Path: {abs_export_path}
+  Relative Path: {rel_export_path}
+  Absolute Path: {abs_export_path}
+  Working Directory: {current_dir}
   Size: {file_size_mb:.2f} MB ({file_size:,} bytes)
   
 Design Summary:
@@ -975,6 +992,478 @@ KLayout runs independently - you can continue using other MCP functions."""
     except Exception as e:
         return f"❌ Unexpected error in visualize_gds_with_klayout: {str(e)}"
 
+# === Tool 13: Export GDS to PNG ===
+@mcp.tool()
+def export_gds_to_png(gds_file_path: str, png_output_path: str = None, 
+                     width: int = 1920, height: int = 1080, dpi: int = 300) -> str:
+    """Export a GDS file to a PNG image for easy visualization and documentation.
+    
+    This function converts GDS layout files into high-quality PNG images without
+    requiring GUI applications. Perfect for documentation, presentations, and
+    quick visualization of quantum circuit designs.
+    
+    Args:
+        gds_file_path: Path to the input GDS file (e.g., './quantum_design.gds')
+        png_output_path: Path for output PNG file (default: auto-generated from GDS filename)
+        width: Image width in pixels (default: 1920)
+        height: Image height in pixels (default: 1080)
+        dpi: Resolution in dots per inch (default: 300)
+    
+    Features:
+    - High-resolution PNG export suitable for publications
+    - Automatic fitting and scaling of the design
+    - Multiple rendering backends (gdspy, gdstk, KLayout batch mode)
+    - Cross-platform compatibility
+    - No GUI required - works in headless environments
+    
+    Returns:
+        Success message with PNG file path and image details,
+        or error message if conversion fails.
+        
+    Prerequisites:
+        - Valid GDS file must exist
+        - One of: gdspy, gdstk, or KLayout must be available
+        - Write permissions for output directory
+        
+    Note:
+        This function tries multiple rendering methods automatically:
+        1. gdspy (if available) - Fast and reliable
+        2. gdstk (if available) - Modern alternative to gdspy  
+        3. KLayout batch mode (if available) - Professional quality
+        Image quality and layer colors may vary between methods.
+    """
+    import subprocess
+    import shutil
+    
+    try:
+        # Get current working directory for path resolution
+        current_dir = os.getcwd()
+        
+        # Validate input file path
+        gds_file_path = gds_file_path.strip()
+        if not gds_file_path:
+            return "❌ Error: No GDS file path provided."
+        
+        # Handle GDS file path resolution
+        if not os.path.isabs(gds_file_path):
+            abs_gds_path = os.path.join(current_dir, gds_file_path)
+        else:
+            abs_gds_path = gds_file_path
+        abs_gds_path = os.path.normpath(abs_gds_path)
+        
+        # Check if GDS file exists
+        if not os.path.exists(abs_gds_path):
+            return f"❌ Error: GDS file not found at '{abs_gds_path}'.\n📂 Current directory: {current_dir}\n📁 Looking for: {gds_file_path}"
+        
+        if not os.path.isfile(abs_gds_path):
+            return f"❌ Error: '{abs_gds_path}' is not a file."
+        
+        # Check file size
+        file_size = os.path.getsize(abs_gds_path)
+        if file_size == 0:
+            return f"❌ Error: GDS file is empty (0 bytes)."
+        
+        # Generate output path if not specified
+        if png_output_path is None:
+            base_name = os.path.splitext(os.path.basename(abs_gds_path))[0]
+            png_output_path = f"{base_name}_visualization.png"
+        
+        # Handle PNG output path resolution
+        if not os.path.isabs(png_output_path):
+            abs_png_path = os.path.join(current_dir, png_output_path)
+        else:
+            abs_png_path = png_output_path
+        abs_png_path = os.path.normpath(abs_png_path)
+        
+        # Ensure PNG extension
+        if not abs_png_path.lower().endswith('.png'):
+            abs_png_path += '.png'
+        
+        # Create output directory if needed
+        output_dir = os.path.dirname(abs_png_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+        
+        # Try multiple rendering methods in order of preference
+        
+        # Method 1: Try gdspy (fast and reliable)
+        try:
+            import gdspy
+            return _export_gds_to_png_gdspy(abs_gds_path, abs_png_path, width, height, dpi)
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"gdspy method failed: {e}")
+        
+        # Method 2: Try gdstk (modern alternative)
+        try:
+            import gdstk
+            return _export_gds_to_png_gdstk(abs_gds_path, abs_png_path, width, height, dpi)
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"gdstk method failed: {e}")
+        
+        # Method 3: Try KLayout in batch mode (high quality)
+        klayout_cmd = None
+        for cmd_name in ['klayout', 'klayout_app', 'klayout.exe']:
+            if shutil.which(cmd_name):
+                klayout_cmd = cmd_name
+                break
+        
+        if klayout_cmd:
+            try:
+                return _export_gds_to_png_klayout(abs_gds_path, abs_png_path, width, height, dpi, klayout_cmd)
+            except Exception as e:
+                print(f"KLayout batch method failed: {e}")
+        
+        # If all methods fail, return helpful error message
+        # Calculate relative paths for display
+        try:
+            rel_gds_path = os.path.relpath(abs_gds_path, current_dir)
+            rel_png_path = os.path.relpath(abs_png_path, current_dir)
+        except ValueError:
+            rel_gds_path = abs_gds_path
+            rel_png_path = abs_png_path
+            
+        return f"""❌ Error: No suitable GDS rendering library found.
+
+To enable GDS to PNG conversion, install one of these options:
+
+**Option 1 - gdspy (Recommended):**
+```bash
+pip install gdspy matplotlib pillow
+```
+
+**Option 2 - gdstk (Modern alternative):**
+```bash
+pip install gdstk matplotlib pillow
+```
+
+**Option 3 - KLayout (Professional):**
+- Linux: sudo apt install klayout
+- macOS: brew install klayout
+- Windows: Download from https://www.klayout.de/
+
+File Information:
+• GDS File: {rel_gds_path}
+• Absolute Path: {abs_gds_path}
+• Working Directory: {current_dir}
+• Size: {file_size / (1024*1024):.2f} MB
+• Desired Output: {rel_png_path}
+
+Once a library is installed, try running this function again."""
+        
+    except Exception as e:
+        return f"❌ Unexpected error in export_gds_to_png: {str(e)}"
+
+def _export_gds_to_png_gdspy(gds_path, png_path, width, height, dpi):
+    """Export GDS to PNG using gdspy library."""
+    import gdspy
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    from matplotlib.collections import PatchCollection
+    
+    try:
+        # Load the GDS file
+        gdsii = gdspy.GdsLibrary(infile=gds_path)
+        
+        # Get the first cell (usually the top cell)
+        if not gdsii.cells:
+            return f"❌ Error: No cells found in GDS file."
+        
+        cell_name = list(gdsii.cells.keys())[0]
+        cell = gdsii.cells[cell_name]
+        
+        # Create figure with specified dimensions
+        fig_width = width / dpi
+        fig_height = height / dpi
+        fig, ax = plt.subplots(1, 1, figsize=(fig_width, fig_height), dpi=dpi)
+        
+        # Get all polygons from the cell
+        polygons = cell.get_polygons(by_spec=True)
+        
+        if not polygons:
+            return f"❌ Error: No polygons found in GDS cell '{cell_name}'."
+        
+        # Color map for different layers
+        colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        
+        all_patches = []
+        layer_info = []
+        
+        for spec, poly_list in polygons.items():
+            layer = spec[0]
+            color = colors[layer % len(colors)]
+            
+            layer_info.append(f"Layer {layer}: {len(poly_list)} polygons")
+            
+            for poly in poly_list:
+                if len(poly) >= 3:  # Valid polygon needs at least 3 points
+                    patch = patches.Polygon(poly, closed=True, facecolor=color, 
+                                          edgecolor='black', alpha=0.7, linewidth=0.5)
+                    all_patches.append(patch)
+        
+        # Add all patches to the plot
+        if all_patches:
+            collection = PatchCollection(all_patches, match_original=True)
+            ax.add_collection(collection)
+        
+        # Set aspect ratio and fit to data
+        ax.set_aspect('equal')
+        ax.autoscale()
+        
+        # Remove axes for cleaner look
+        ax.set_xlabel('X (μm)')
+        ax.set_ylabel('Y (μm)')
+        ax.grid(True, alpha=0.3)
+        
+        # Add title
+        ax.set_title(f'Quantum Circuit Layout - {os.path.basename(gds_path)}', 
+                    fontsize=12, fontweight='bold')
+        
+        # Save the figure
+        plt.tight_layout()
+        plt.savefig(png_path, dpi=dpi, bbox_inches='tight', 
+                   facecolor='white', edgecolor='none')
+        plt.close()
+        
+        # Get file info
+        png_size = os.path.getsize(png_path)
+        png_size_mb = png_size / (1024 * 1024)
+        
+        # Calculate relative paths for display
+        current_dir = os.getcwd()
+        try:
+            rel_gds_path = os.path.relpath(gds_path, current_dir)
+            rel_png_path = os.path.relpath(png_path, current_dir)
+        except ValueError:
+            rel_gds_path = gds_path
+            rel_png_path = png_path
+            
+        return f"""✅ Successfully exported GDS to PNG using gdspy!
+
+📁 **File Information:**
+• Input GDS: {rel_gds_path}
+• Output PNG: {rel_png_path}
+• Working Directory: {current_dir}
+• PNG Size: {png_size_mb:.2f} MB ({png_size:,} bytes)
+
+🎨 **Image Details:**
+• Dimensions: {width} x {height} pixels
+• Resolution: {dpi} DPI
+• Cell: {cell_name}
+• Layers Found: {len(polygons)}
+• Total Polygons: {sum(len(polys) for polys in polygons.values())}
+
+📊 **Layer Summary:**
+{chr(10).join(layer_info)}
+
+🎯 **Rendering Method:** gdspy + matplotlib
+✨ **Quality:** High-resolution vector-based rendering suitable for publications
+
+The PNG file is ready for use in presentations, documentation, or further analysis!"""
+        
+    except Exception as e:
+        return f"❌ Error with gdspy export: {str(e)}"
+
+def _export_gds_to_png_gdstk(gds_path, png_path, width, height, dpi):
+    """Export GDS to PNG using gdstk library."""
+    import gdstk
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    from matplotlib.collections import PatchCollection
+    
+    try:
+        # Load the GDS file
+        library = gdstk.read_gds(gds_path)
+        
+        if not library.cells:
+            return f"❌ Error: No cells found in GDS file."
+        
+        # Get the top cell (last one is usually the main cell)
+        cell = library.cells[-1]
+        
+        # Create figure
+        fig_width = width / dpi
+        fig_height = height / dpi
+        fig, ax = plt.subplots(1, 1, figsize=(fig_width, fig_height), dpi=dpi)
+        
+        # Color map for different layers
+        colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        
+        all_patches = []
+        layer_count = {}
+        
+        # Process all polygons in the cell
+        for polygon in cell.polygons:
+            layer = polygon.layer
+            if layer not in layer_count:
+                layer_count[layer] = 0
+            layer_count[layer] += 1
+            
+            color = colors[layer % len(colors)]
+            
+            # Get polygon points
+            points = polygon.points
+            if len(points) >= 3:
+                patch = patches.Polygon(points, closed=True, facecolor=color,
+                                      edgecolor='black', alpha=0.7, linewidth=0.5)
+                all_patches.append(patch)
+        
+        # Add all patches to the plot
+        if all_patches:
+            collection = PatchCollection(all_patches, match_original=True)
+            ax.add_collection(collection)
+        
+        # Set aspect ratio and fit to data
+        ax.set_aspect('equal')
+        ax.autoscale()
+        
+        # Styling
+        ax.set_xlabel('X (μm)')
+        ax.set_ylabel('Y (μm)')
+        ax.grid(True, alpha=0.3)
+        ax.set_title(f'Quantum Circuit Layout - {os.path.basename(gds_path)}', 
+                    fontsize=12, fontweight='bold')
+        
+        # Save the figure
+        plt.tight_layout()
+        plt.savefig(png_path, dpi=dpi, bbox_inches='tight',
+                   facecolor='white', edgecolor='none')
+        plt.close()
+        
+        # Get file info
+        png_size = os.path.getsize(png_path)
+        png_size_mb = png_size / (1024 * 1024)
+        
+        layer_info = [f"Layer {layer}: {count} polygons" for layer, count in sorted(layer_count.items())]
+        
+        # Calculate relative paths for display
+        current_dir = os.getcwd()
+        try:
+            rel_gds_path = os.path.relpath(gds_path, current_dir)
+            rel_png_path = os.path.relpath(png_path, current_dir)
+        except ValueError:
+            rel_gds_path = gds_path
+            rel_png_path = png_path
+            
+        return f"""✅ Successfully exported GDS to PNG using gdstk!
+
+📁 **File Information:**
+• Input GDS: {rel_gds_path}
+• Output PNG: {rel_png_path}
+• Working Directory: {current_dir}
+• PNG Size: {png_size_mb:.2f} MB ({png_size:,} bytes)
+
+🎨 **Image Details:**
+• Dimensions: {width} x {height} pixels
+• Resolution: {dpi} DPI
+• Cell: {cell.name}
+• Layers Found: {len(layer_count)}
+• Total Polygons: {sum(layer_count.values())}
+
+📊 **Layer Summary:**
+{chr(10).join(layer_info)}
+
+🎯 **Rendering Method:** gdstk + matplotlib
+✨ **Quality:** Modern high-resolution rendering
+
+The PNG file is ready for presentations and documentation!"""
+        
+    except Exception as e:
+        return f"❌ Error with gdstk export: {str(e)}"
+
+def _export_gds_to_png_klayout(gds_path, png_path, width, height, dpi, klayout_cmd):
+    """Export GDS to PNG using KLayout in batch mode."""
+    import subprocess
+    import tempfile
+    
+    try:
+        # Create a simple KLayout script for PNG export
+        script_content = f"""
+import pya
+
+# Load the GDS file
+app = pya.Application.instance()
+main_window = app.main_window()
+layout_view = main_window.create_layout(0)
+layout_view.load_layout("{gds_path}")
+
+# Fit the view
+layout_view.zoom_fit()
+
+# Set up export options
+save_options = pya.SaveLayoutOptions()
+save_options.set_format("PNG")
+save_options.set_scale_factor(1.0)
+
+# Export to PNG
+layout_view.save_image("{png_path}", {width}, {height})
+
+# Exit
+app.exit(0)
+"""
+        
+        # Write script to temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(script_content)
+            script_path = f.name
+        
+        try:
+            # Run KLayout in batch mode
+            result = subprocess.run(
+                [klayout_cmd, '-b', '-r', script_path],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            # Check if PNG was created
+            if os.path.exists(png_path):
+                png_size = os.path.getsize(png_path)
+                png_size_mb = png_size / (1024 * 1024)
+                
+                # Calculate relative paths for display
+                current_dir = os.getcwd()
+                try:
+                    rel_gds_path = os.path.relpath(gds_path, current_dir)
+                    rel_png_path = os.path.relpath(png_path, current_dir)
+                except ValueError:
+                    rel_gds_path = gds_path
+                    rel_png_path = png_path
+                    
+                return f"""✅ Successfully exported GDS to PNG using KLayout batch mode!
+
+📁 **File Information:**
+• Input GDS: {rel_gds_path}
+• Output PNG: {rel_png_path}
+• Working Directory: {current_dir}
+• PNG Size: {png_size_mb:.2f} MB ({png_size:,} bytes)
+
+🎨 **Image Details:**
+• Dimensions: {width} x {height} pixels
+• Resolution: {dpi} DPI
+
+🎯 **Rendering Method:** KLayout Professional
+✨ **Quality:** Professional layout tool rendering
+
+The PNG export is complete and ready for use!"""
+            else:
+                return f"❌ Error: KLayout did not create PNG file. Return code: {result.returncode}\nStdout: {result.stdout}\nStderr: {result.stderr}"
+        
+        finally:
+            # Clean up temporary script file
+            try:
+                os.unlink(script_path)
+            except:
+                pass
+                
+    except subprocess.TimeoutExpired:
+        return f"❌ Error: KLayout batch export timed out after 60 seconds."
+    except Exception as e:
+        return f"❌ Error with KLayout batch export: {str(e)}"
+
 # === Resource 1: List All Resources ===
 @mcp.resource("resources://list")
 def get_all_resources() -> str:
@@ -1014,16 +1503,50 @@ def get_all_resources() -> str:
             content += f"- **{title}** - Use @pdfs://{filename} to access\n"
         content += "\n"
     
-    if not python_files and not pdf_files:
-        return "# No Resources Found\n\nNo Python files or PDFs found in the resources directory."
+    # Add PNG visualizations
+    current_dir = Path(os.getcwd())
+    png_files = []
+    visualization_patterns = [
+        "*visualization*.png",
+        "*_chip*.png", 
+        "*quantum*.png",
+        "*qubit*.png",
+        "*circuit*.png"
+    ]
+    
+    # Find PNG files matching visualization patterns
+    for pattern in visualization_patterns:
+        for file_path in current_dir.glob(pattern):
+            if file_path.is_file() and file_path.name not in png_files:
+                png_files.append(file_path.name)
+    
+    # Also check for PNG files with corresponding GDS files
+    for file_path in current_dir.glob("*.png"):
+        if file_path.is_file() and file_path.name not in png_files:
+            gds_name = file_path.stem + ".gds"
+            if (current_dir / gds_name).exists():
+                png_files.append(file_path.name)
+    
+    if png_files:
+        content += "## 🖼️ PNG Visualizations\n"
+        content += "Quantum circuit visualization images:\n\n"
+        for filename in sorted(png_files):
+            title = filename.replace('.png', '').replace('_', ' ').replace('-', ' ').title()
+            content += f"- **{title}** - Use @png://{filename} to access\n"
+        content += "\n"
+    
+    if not python_files and not pdf_files and not png_files:
+        return "# No Resources Found\n\nNo Python files, PDFs, or PNG visualizations found."
     
     content += "## Usage\n"
     content += "- Use `@resources://list` to see this comprehensive list\n"
     content += "- Use `@examples://list` to see only Python examples\n"
     content += "- Use `@pdfs://list` to see only PDF documents\n"
+    content += "- Use `@png://list` to see only PNG visualizations\n"
     content += "- Use `@examples://{filename}` to view Python source code\n"
     content += "- Use `@pdfs://{filename}` to get PDF information\n"
-    content += "- Use tools `run_python_example` and `extract_pdf_text` to work with files\n"
+    content += "- Use `@png://{filename}` to get PNG visualization details\n"
+    content += "- Use tools `run_python_example`, `extract_pdf_text`, and `export_gds_to_png` to work with files\n"
     
     return content
 
@@ -1195,7 +1718,165 @@ def get_python_example_content(filename: str) -> str:
     except Exception as e:
         return f"# Error Reading {filename}\n\nFailed to read the file: {str(e)}"
 
-# === Tool 13: Run Python Example ===
+# === Resource 6: List PNG Visualizations ===
+@mcp.resource("png://list")
+def get_png_visualizations() -> str:
+    """
+    List all available PNG visualization files created by GDS export functions.
+    
+    This resource provides a list of all PNG files in the current working directory
+    that appear to be quantum circuit visualizations created by the export_gds_to_png function.
+    """
+    current_dir = Path(os.getcwd())
+    
+    png_files = []
+    visualization_patterns = [
+        "*visualization*.png",
+        "*_chip*.png", 
+        "*quantum*.png",
+        "*qubit*.png",
+        "*circuit*.png"
+    ]
+    
+    # Find PNG files matching visualization patterns
+    for pattern in visualization_patterns:
+        for file_path in current_dir.glob(pattern):
+            if file_path.is_file() and file_path.name not in png_files:
+                png_files.append(file_path.name)
+    
+    # Also check for any PNG files that might be GDS exports
+    for file_path in current_dir.glob("*.png"):
+        if file_path.is_file() and file_path.name not in png_files:
+            # Check if there's a corresponding GDS file
+            gds_name = file_path.stem + ".gds"
+            if (current_dir / gds_name).exists():
+                png_files.append(file_path.name)
+    
+    if not png_files:
+        return "# No PNG Visualizations Found\n\nNo PNG visualization files found in the current working directory.\n\nUse the `export_gds_to_png` tool to create visualizations from GDS files."
+    
+    content = "# Available PNG Visualizations\n\n"
+    content += "PNG visualization files created by quantum circuit design tools:\n\n"
+    
+    for filename in sorted(png_files):
+        file_path = current_dir / filename
+        file_size = file_path.stat().st_size
+        file_size_mb = file_size / (1024 * 1024)
+        
+        # Create a readable title from filename
+        title = filename.replace('.png', '').replace('_', ' ').replace('-', ' ').title()
+        
+        content += f"- **{title}**\n"
+        content += f"  - File: `{filename}`\n"
+        content += f"  - Size: {file_size_mb:.2f} MB\n"
+        content += f"  - Access: Use @png://{filename} to get detailed info\n\n"
+    
+    content += "## Usage\n"
+    content += "- Use `@png://list` to see this list\n"
+    content += "- Use `@png://{filename}` to get detailed PNG information\n"
+    content += "- These PNG files can be opened with any image viewer\n"
+    content += "- Use the `export_gds_to_png` tool to create new visualizations\n"
+    
+    return content
+
+# === Resource 7: Get PNG Visualization Information ===
+@mcp.resource("png://{filename}")
+def get_png_info(filename: str) -> str:
+    """
+    Get detailed information about a specific PNG visualization file.
+    
+    Args:
+        filename: The name of the PNG file to get info about (e.g., 'quantum_circuit_visualization.png')
+    """
+    if not filename.endswith('.png'):
+        filename += '.png'
+    
+    current_dir = Path(os.getcwd())
+    file_path = current_dir / filename
+    
+    if not file_path.exists():
+        available_files = [f.name for f in current_dir.glob("*.png")]
+        return f"# PNG Not Found: {filename}\n\nThe file '{filename}' does not exist in the current working directory.\n\nAvailable PNG files: {', '.join(available_files) if available_files else 'None'}\n\nUse @png://list to see available visualizations."
+    
+    try:
+        # Get basic file information
+        file_size = file_path.stat().st_size
+        file_size_mb = file_size / (1024 * 1024)
+        file_mtime = file_path.stat().st_mtime
+        
+        import datetime
+        modification_time = datetime.datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Create readable title from filename
+        title = filename.replace('.png', '').replace('_', ' ').replace('-', ' ').title()
+        
+        content = f"# PNG Visualization: {title}\n\n"
+        content += f"**Filename:** `{filename}`\n"
+        content += f"**File Path:** `{file_path}`\n"
+        content += f"**File Size:** {file_size_mb:.2f} MB ({file_size:,} bytes)\n"
+        content += f"**Last Modified:** {modification_time}\n\n"
+        
+        # Try to get image dimensions if PIL/Pillow is available
+        try:
+            from PIL import Image
+            with Image.open(file_path) as img:
+                width, height = img.size
+                mode = img.mode
+                content += f"**Image Dimensions:** {width} x {height} pixels\n"
+                content += f"**Color Mode:** {mode}\n"
+                
+                # Calculate DPI if available
+                if hasattr(img, 'info') and 'dpi' in img.info:
+                    dpi = img.info['dpi']
+                    content += f"**DPI:** {dpi[0]} x {dpi[1]}\n"
+                    
+        except ImportError:
+            content += "**Note:** PIL/Pillow not available for detailed image analysis\n"
+        except Exception as e:
+            content += f"**Note:** Could not read image metadata: {str(e)}\n"
+        
+        # Check if there's a corresponding GDS file
+        gds_name = filename.replace('.png', '.gds')
+        gds_path = current_dir / gds_name
+        if gds_path.exists():
+            gds_size = gds_path.stat().st_size
+            gds_size_mb = gds_size / (1024 * 1024)
+            content += f"\n**Source GDS File:** `{gds_name}` ({gds_size_mb:.2f} MB)\n"
+        
+        # Detect visualization type based on filename patterns
+        visualization_type = "Unknown"
+        if "quantum" in filename.lower():
+            visualization_type = "Quantum Circuit"
+        elif "qubit" in filename.lower():
+            visualization_type = "Qubit Design"
+        elif "chip" in filename.lower():
+            visualization_type = "Chip Layout"
+        elif "circuit" in filename.lower():
+            visualization_type = "Circuit Design"
+        elif "visualization" in filename.lower():
+            visualization_type = "GDS Visualization"
+            
+        content += f"**Visualization Type:** {visualization_type}\n"
+        
+        content += "\n## Usage\n"
+        content += f"- Open `{filename}` with any image viewer or web browser\n"
+        content += f"- Use in presentations, documentation, or reports\n"
+        content += f"- High-resolution suitable for printing and publications\n"
+        
+        if gds_path.exists():
+            content += f"- Regenerate with `export_gds_to_png(gds_file_path='{gds_name}', png_output_path='{filename}')`\n"
+        
+        content += "\n## Technical Details\n"
+        content += "- Created by Qiskit Metal MCP Server GDS to PNG export function\n"
+        content += "- Vector-based rendering with matplotlib backend\n"
+        content += "- Layer-specific color coding for quantum circuit components\n"
+        
+        return content
+        
+    except Exception as e:
+        return f"# Error Reading PNG Info: {filename}\n\nFailed to get file information: {str(e)}"
+
+# === Tool 14: Run Python Example ===
 @mcp.tool()
 def run_python_example(filename: str) -> str:
     """Execute a Python example from the resources directory.
@@ -1258,7 +1939,7 @@ def run_python_example(filename: str) -> str:
     except Exception as e:
         return f"❌ Error executing {filename}: {str(e)}"
 
-# === Tool 14: Extract PDF Text ===
+# === Tool 15: Extract PDF Text ===
 @mcp.tool()
 def extract_pdf_text(filename: str, pages: str = "all", max_chars: int = 10000) -> str:
     """Extract text content from a PDF document in the resources directory.
