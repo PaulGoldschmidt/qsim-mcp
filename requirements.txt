@@ -1,17 +1,42 @@
-# Core MCP and Quantum Computing Libraries
-fastmcp>=1.0.0
-qiskit-metal>=0.1.0
+# Quantum Hardware Optimization Platform - Combined Requirements
+# =============================================================
+# This file contains essential dependencies for both MCP servers
 
-# PDF Processing Libraries (choose one or more)
+# Core MCP Framework
+fastmcp>=1.0.0
+
+# Quantum Circuit Design (Qiskit Metal MCP Server)
+qiskit-metal>=0.1.0
+qiskit>=0.45.0
+
+# Scientific Computing (both servers)
+numpy>=1.21.0
+scipy>=1.9.0
+pandas>=1.5.0
+
+# Visualization and Plotting (both servers)
+matplotlib>=3.5.0
+
+# Layout and GDS Processing (Qiskit Metal)
+gdspy>=1.6.0
+gdstk>=0.9.0
+
+# GUI Framework (Qiskit Metal)
+PySide2>=5.15.0
+
+# Geometry and CAD (Qiskit Metal)
+shapely>=2.0.0
+geopandas>=0.12.0
+
+# File I/O and Data Processing
+pathlib2>=2.3.0
+PyYAML>=6.0.0
+
+# PDF Processing (for research papers)
 PyPDF2>=3.0.0
 pdfplumber>=0.10.0
-PyMuPDF>=1.23.0
 
-# Standard Library Extensions
-pathlib2>=2.3.0
-numpy>=1.21.0
-
-# Optional: Visualization and Layout
+# Optional: Professional Layout Viewing
 # klayout>=0.28.0  # Uncomment if installing via pip
 
 # Development Dependencies (optional)
@@ -22,3 +47,22 @@ pytest-cov>=4.0.0
 # Documentation Dependencies (optional)
 sphinx>=5.0.0
 sphinx-rtd-theme>=1.0.0
+
+# System Requirements (install separately):
+# ========================================
+# 
+# 1. GNU Octave (>= 6.0) - For EM simulation
+#    Ubuntu/Debian: sudo apt install octave
+#    macOS: brew install octave
+#
+# 2. OpenEMS Electromagnetic Simulator
+#    Ubuntu/Debian: sudo apt install openems
+#    Build from source: https://openems.de
+#
+# 3. CSXCAD (3D CAD geometry library)
+#    Usually installed with OpenEMS
+#    Ubuntu/Debian: sudo apt install csxcad
+#
+# Note: See individual server requirements.txt files for detailed dependencies:
+# - src/qiskit-metal-mcp/requirements.txt (Quantum circuit design)
+# - src/octave-mcp/requirements.txt (EM simulation)

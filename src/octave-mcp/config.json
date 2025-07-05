@@ -1,0 +1,96 @@
+{
+  "server": {
+    "name": "Octave OpenEMS MCP Server",
+    "version": "0.1.0",
+    "description": "Octave-based electromagnetic field simulation server for quantum circuit design"
+  },
+  "octave_settings": {
+    "executable": "octave",
+    "options": ["--no-gui", "--eval"],
+    "timeout_seconds": 300,
+    "add_paths": [
+      "/usr/share/openEMS/matlab",
+      "/usr/share/CSXCAD/matlab",
+      "/opt/openEMS/matlab",
+      "/opt/CSXCAD/matlab"
+    ]
+  },
+  "simulation_defaults": {
+    "frequency": {
+      "start": 1e9,
+      "stop": 20e9,
+      "points": 201,
+      "unit": "Hz"
+    },
+    "cpw": {
+      "width": 10.0,
+      "gap": 6.0,
+      "length": 1000.0,
+      "substrate_width": 5000.0,
+      "unit": "micrometers"
+    },
+    "substrate": {
+      "height": 500.0,
+      "relative_permittivity": 11.9,
+      "material": "Silicon",
+      "unit": "micrometers"
+    },
+    "mesh": {
+      "resolution": 40,
+      "edge_resolution": 40,
+      "pml_cells": [8, 8, 8, 8, 8, 8],
+      "unit": "micrometers"
+    },
+    "excitation": {
+      "reference_impedance": 50,
+      "port_length": 10000,
+      "unit": "Ohms"
+    }
+  },
+  "output_settings": {
+    "default_directory": "./octave_simulations",
+    "script_extension": ".m",
+    "data_formats": ["txt", "mat", "png", "fig"],
+    "export_formats": ["touchstone", "csv", "json", "matlab"]
+  },
+  "materials": {
+    "metal": {
+      "conductivity": 5.6e7,
+      "material": "Gold",
+      "unit": "S/m"
+    },
+    "substrate_silicon": {
+      "relative_permittivity": 11.9,
+      "loss_tangent": 0.0001,
+      "material": "Silicon"
+    },
+    "substrate_sapphire": {
+      "relative_permittivity": 9.4,
+      "loss_tangent": 0.00001,
+      "material": "Sapphire"
+    }
+  },
+  "boundary_conditions": {
+    "cpw_default": [2, 2, 2, 2, 2, 2],
+    "microstrip_default": [0, 0, 2, 2, 2, 2],
+    "waveguide_default": [1, 1, 1, 1, 2, 2]
+  },
+  "performance": {
+    "max_frequency_points": 1000,
+    "max_simulations_cached": 10,
+    "convergence_criteria": 1e-4,
+    "memory_cleanup_threshold": 5
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "octave_openems_mcp.log",
+    "console": true,
+    "log_octave_output": true
+  },
+  "advanced": {
+    "auto_mesh_refinement": true,
+    "field_dump_enabled": false,
+    "parallel_execution": false,
+    "temp_file_cleanup": true
+  }
+} 

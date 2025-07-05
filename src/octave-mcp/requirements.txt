@@ -1,0 +1,45 @@
+# Octave OpenEMS MCP Server Requirements
+# =======================================
+
+# Core MCP Framework
+fastmcp>=1.0.0
+
+# Scientific Computing
+numpy>=1.21.0
+scipy>=1.9.0
+
+# Plotting and Visualization
+matplotlib>=3.5.0
+
+# File I/O and Data Processing
+pathlib2>=2.3.0
+
+# Development and Testing (optional)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+
+# System Requirements (must be installed separately):
+# ===================================================
+# 
+# 1. GNU Octave (>= 6.0)
+#    Ubuntu/Debian: sudo apt install octave
+#    macOS: brew install octave
+#    Windows: Download from https://octave.org
+#
+# 2. OpenEMS Electromagnetic Simulator
+#    Ubuntu/Debian: sudo apt install openems
+#    Build from source: https://openems.de
+#
+# 3. CSXCAD (3D CAD geometry library)
+#    Usually installed with OpenEMS
+#    Ubuntu/Debian: sudo apt install csxcad
+#
+# 4. AppCSXCAD (3D Viewer - optional)
+#    Ubuntu/Debian: sudo apt install appcsxcad
+#
+# Optional: For advanced visualization
+# ====================================
+# ParaView (for advanced field visualization)
+# VTK (Visualization Toolkit)
+# Gmsh (mesh generation) 
